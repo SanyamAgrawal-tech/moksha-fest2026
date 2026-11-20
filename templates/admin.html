@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Moksha Admin | Database</title>
+<style>
+:root{--bg:#0d1117;--card:#161b22;--tx:#e6edf3;--sub:#8b949e;--line:#30363d;--acc:#d9a05b;--ok:#3fb950}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--tx);font:16px/1.55 -apple-system,'Segoe UI',Roboto,Arial,sans-serif;padding:32px 20px}
+.wrap{max-width:1100px;margin:auto}
+h1{font-size:1.9rem;letter-spacing:3px;text-transform:uppercase}
+h1 span{color:var(--acc)}
+.sub{color:var(--sub);margin:6px 0 24px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:24px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px;text-align:center}
+.stat b{display:block;font-size:2rem;color:var(--acc)}
+.stat span{color:var(--sub);font-size:.85rem;text-transform:uppercase;letter-spacing:1px}
+nav{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:18px}
+nav button{background:var(--card);color:var(--tx);border:1px solid var(--line);padding:9px 18px;border-radius:22px;font:inherit;cursor:pointer;transition:.2s}
+nav button:hover{border-color:var(--acc)}
+nav button.on{background:var(--acc);color:#111;border-color:var(--acc);font-weight:700}
+.panel{display:none}
+.panel.on{display:block}
+table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden;font-size:.88rem}
+th{background:rgba(217,160,91,.12);color:var(--acc);text-align:left;padding:10px 12px;text-transform:uppercase;font-size:.7rem;letter-spacing:1px}
+td{padding:10px 12px;border-top:1px solid var(--line);color:var(--tx)}
+tr:hover td{background:rgba(255,255,255,.03)}
+.empty{color:var(--sub);padding:24px;text-align:center}
+.tools{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:10px}
+.tools h2{font-size:1.1rem}
+.tools button{background:none;color:var(--acc);border:1px solid var(--acc);padding:7px 16px;border-radius:20px;cursor:pointer;font:inherit;font-size:.85rem}
+.errorbox{display:none;background:rgba(248,81,73,.12);border:1px solid #f8514944;color:#ffa198;padding:12px 16px;border-radius:10px;margin-bottom:16px}
+.h-tools{justify-content:flex-end}
+.h-tools .out{color:var(--sub);text-decoration:none;font-size:.85rem;border:1px solid var(--line);padding:7px 16px;border-radius:20px;transition:.2s}
+.h-tools .out:hover{color:#ffa198;border-color:#f8514944}
+</style></head>
+<body>
+<div class="wrap">
+  <h1>Moksha <span>Admin</span></h1>
+  <p class="sub">Live view of everything stored in moksha.db &mdash; refreshes on every reload.</p>
+
+  <div class="tools h-tools">
+    <a class="out" href="/admin/logout">Log out</a>
+  </div>
+
+  <div class="stats" id="stats"></div>
+  <div class="errorbox" id="err"></div>
+
+  <nav id="tabs">
+    <button class="on" data-p="participants">Participants</button>
+    <button data-p="registrations">Registrations</button>
+    <button data-p="passes">Entry Passes</button>
+    <button data-p="events">Events</button>
+    <button data-p="vendors">Vendors &amp; Sponsors</button>
+    <button data-p="feedback">Feedback</button>
+  </nav>
+
+  <div id="panels"></div>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = v => String(v ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+// table column definitions per panel
+const COLS = {
+  participants: ['ID','Name','Email','Phone','Age','Gender','College','Role','Emergency','Registered At'],
+  registrations: ['Reg #','Participant','Event','Date','Team','Size','Experience'],
+  passes: ['Pass #','Participant','Pass Type','Price','Issued At'],
+  events: ['ID','Event','Category','Fee','Seats Filled / Max'],
+  vendors: ['ID','Company','Contact Person','Email','Type','City','Stall','Sponsor Tier'],
+  feedback: ['Name','Role','Category','Message','Created At'],
+};
+const ROWS = {
+  feedback: d => d.feedback.map(f => [f.name, f.role, f.category, f.message, f.created]),
+  events: d => d.events.map(e => [e.id, e.name, e.category, 'Rs ' + e.fee, e.filled + ' / ' + e.seats]),
+};
+
+function cellText(rows, panel) {
+  return rows.map(r => `
+    <tr>${r.map(c => `<td>${esc(c)}</td>`).join('')}</tr>`).join('');
+}
+
+function drawer(panel, data) {
+  const cols = COLS[panel];
+  const rows = ROWS[panel]
+    ? ROWS[panel](data)
+    : data[panel].map(p => cols.map(c => p[String(c).toLowerCase().replace(/[^a-z]/g,'')]));
+
+  // Explicit row builders to avoid key-guessing mistakes
+  let explicit = null;
+  if (panel === 'participants') explicit = data.participants.map(p => [p.id, p.name, p.email, p.phone, p.age, p.gender, p.college, p.role, p.emergency, p.registered_at]);
+  if (panel === 'registrations') explicit = data.registrations.map(r => [r.reg, r.participant, r.event, r.date, r.team, r.size, r.experience]);
+  if (panel === 'passes') explicit = data.passes.map(p => [p.pass_id, p.participant, p.type, 'Rs ' + p.price, p.issued]);
+  if (panel === 'vendors') explicit = data.vendors.map(v => [v.id, v.company, v.contact, v.email, v.type, v.city, v.stall, v.tier]);
+  if (panel === 'feedback') explicit = data.feedback.map(f => [f.name, f.role, f.category, f.message, f.created]);
+  if (panel === 'events') explicit = data.events.map(e => [e.id, e.name, e.category, 'Rs ' + e.fee, e.filled + ' / ' + e.seats]);
+  const finalRows = explicit || rows;
+  if (!finalRows.length) return `<p class="empty">Nothing saved here yet.</p>`;
+  return `<table><thead><tr>${cols.map(c => `<th>${c}</th>`).join('')}</tr></thead><tbody>${cellText(finalRows, panel)}</tbody></table>`;
+}
+
+async function load() {
+  $('#err').style.display = 'none';
+  try {
+    const resp = await fetch('/api/admin');
+    if (resp.status === 401) { window.location.href = '/admin/login'; return; }
+    const d = await resp.json();
+    if (d.ok === false) throw new Error(d.error);
+    $('#stats').innerHTML = Object.entries(d.stats).map(([k, v]) =>
+      `<div class="stat"><b>${v}</b><span>${k}</span></div>`).join('');
+    document.querySelectorAll('.panel').forEach(p => p.remove());
+    ['participants','registrations','passes','events','vendors','feedback'].forEach(p => {
+      const div = document.createElement('div');
+      div.className = 'panel' + (p === 'participants' ? ' on' : '');
+      div.id = 'p-' + p;
+      div.innerHTML = `<div class="tools"><h2>${p[0].toUpperCase()+p.slice(1)}</h2>
+        <button onclick="load()">Refresh &#8635;</button></div>` + drawer(p, d);
+      $('#panels').appendChild(div);
+    });
+  } catch (e) {
+    $('#err').textContent = 'Could not load database data: ' + e.message;
+    $('#err').style.display = 'block';
+  }
+}
+
+document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('#tabs button, .panel').forEach(x => x.classList.remove('on'));
+  b.classList.add('on');
+  $('#p-' + b.dataset.p).classList.add('on');
+});
+
+load();
+setInterval(load, 30000); // auto-refresh every 30s
+</script>
+</body>
+</html>
