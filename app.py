@@ -15,6 +15,22 @@ app = Flask(__name__, template_folder=templates_dir)
 # Stable secret key across serverless instances so admin login persists
 app.secret_key = os.environ.get("SECRET_KEY", "moksha_fest_2026_super_secret_session_key")
 
+
+class VercelPathFixMiddleware:
+    def __init__(self, wsgi_app):
+        self.wsgi_app = wsgi_app
+
+    def __call__(self, environ, start_response):
+        path = environ.get('PATH_INFO', '')
+        if path.startswith('/api/index.py'):
+            environ['PATH_INFO'] = path[len('/api/index.py'):] or '/'
+        elif path.startswith('/api/index'):
+            environ['PATH_INFO'] = path[len('/api/index'):] or '/'
+        return self.wsgi_app(environ, start_response)
+
+
+app.wsgi_app = VercelPathFixMiddleware(app.wsgi_app)
+
 ADMIN_PASSWORD = "moksha2026"  # Admin login password
 IS_VERCEL = bool(os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"))
 
