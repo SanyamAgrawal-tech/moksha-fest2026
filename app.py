@@ -4,7 +4,12 @@ import os
 import shutil
 import tempfile
 from contextlib import contextmanager
-from flask import Flask, request, jsonify, render_template, session, redirect, url_for
+from flask import Flask, request, jsonify, render_template, session, redirect, url_for, Response
+
+try:
+    import turso_db
+except ImportError:
+    from . import turso_db
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 templates_dir = os.path.join(BASE_DIR, "templates")
@@ -31,8 +36,12 @@ class VercelPathFixMiddleware:
 
 app.wsgi_app = VercelPathFixMiddleware(app.wsgi_app)
 
-ADMIN_PASSWORD = "moksha2026"  # Admin login password
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "moksha2026")
 IS_VERCEL = bool(os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"))
+
+
+def is_using_turso():
+    return bool(os.environ.get("TURSO_DATABASE_URL") and os.environ.get("TURSO_AUTH_TOKEN"))
 
 
 def get_db_path():
@@ -51,6 +60,11 @@ def is_admin():
 
 
 def GET_DB():
+    if is_using_turso():
+        return turso_db.TursoConnection(
+            os.environ["TURSO_DATABASE_URL"],
+            os.environ["TURSO_AUTH_TOKEN"]
+        )
     # timeout: wait up to 30s instead of failing instantly if the file is briefly locked
     conn = sqlite3.connect(get_db_path(), timeout=30)
     conn.execute("PRAGMA foreign_keys = ON")
@@ -75,9 +89,7 @@ def db():
 
 def init_db():
     base_dir = os.path.dirname(__file__)
-    schema_path = os.path.join(base_dir, "schema (1) (1).sql")
-    if not os.path.exists(schema_path):
-        schema_path = os.path.join(base_dir, "schema.sql")
+    schema_path = os.path.join(base_dir, "schema.sql")
 
     with db() as (conn, cursor):
         if os.path.exists(schema_path):
@@ -85,13 +97,12 @@ def init_db():
                 sql_script = f.read()
 
             # Only build the schema (and seed data) on first run.
-            # This keeps previously registered participants saved across restarts.
             existing = cursor.execute(
                 "SELECT name FROM sqlite_master WHERE type='table' AND name='PARTICIPANT'").fetchone()
             if not existing:
                 cursor.executescript(sql_script)
 
-        # FEEDBACK used by the dashboard but not present in the schema file
+        # FEEDBACK used by the dashboard
         cursor.execute("""CREATE TABLE IF NOT EXISTS FEEDBACK (
             feedback_id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT, email TEXT, role TEXT, category TEXT,
@@ -393,7 +404,10 @@ def api_admin():
                        (SELECT COUNT(*) FROM VENDOR),
                        (SELECT COUNT(*) FROM FEEDBACK)""").fetchone()
 
+            db_mode = "turso" if is_using_turso() else ("vercel_tmp" if IS_VERCEL else "local_sqlite")
+
         return jsonify({
+            "db_mode": db_mode,
             "stats": {"participants": stats[0], "registrations": stats[1],
                       "vendors": stats[2], "feedback": stats[3]},
             "participants": participants,
@@ -407,6 +421,43 @@ def api_admin():
         import traceback
         traceback.print_exc()
         return jsonify({"ok": False, "error": friendly_error(e)}), 400
+
+
+@app.route("/api/admin/export_csv", methods=["GET"])
+def api_admin_export_csv():
+    if not is_admin():
+        return jsonify({"ok": False, "error": "Not logged in"}), 401
+    import csv
+    import io
+    
+    with db() as (conn, cursor):
+        rows = cursor.execute("""
+            SELECT p.participant_id, p.full_name, p.email, p.phone, p.age, p.gender,
+                   c.name, p.course_branch, p.year_of_study, p.enrollment_no,
+                   p.participant_role, ep.pass_type, ep.price, p.emergency_name,
+                   p.emergency_phone, p.dietary_pref, p.tshirt_size, p.accommodation,
+                   p.created_at
+            FROM PARTICIPANT p
+            LEFT JOIN COLLEGE c ON p.college_id = c.college_id
+            LEFT JOIN ENTRY_PASS ep ON p.participant_id = ep.participant_id
+            ORDER BY p.participant_id DESC
+        """).fetchall()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "ID", "Name", "Email", "Phone", "Age", "Gender", "College",
+        "Branch", "Year", "Enrollment", "Role", "Pass Type", "Pass Price",
+        "Emergency Name", "Emergency Phone", "Dietary", "T-Shirt", "Accommodation", "Registered At"
+    ])
+    for r in rows:
+        writer.writerow(list(r))
+    
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": "attachment;filename=moksha_participants.csv"}
+    )
 
 
 def friendly_error(e):

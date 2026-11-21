@@ -40,6 +40,8 @@ tr:hover td{background:rgba(255,255,255,.03)}
   <p class="sub">Live view of everything stored in moksha.db &mdash; refreshes on every reload.</p>
 
   <div class="tools h-tools">
+    <span id="db-badge" style="margin-right:auto;font-size:.82rem;padding:6px 14px;border-radius:20px;border:1px solid var(--line);background:var(--card);color:var(--sub);">Checking database...</span>
+    <a class="out" href="/api/admin/export_csv" style="margin-right:10px;border-color:var(--acc);color:var(--acc);" download>&darr; Export CSV</a>
     <a class="out" href="/" style="margin-right:10px">&larr; Public Site</a>
     <a class="out" href="/admin/logout">Log out</a>
   </div>
@@ -108,6 +110,20 @@ async function load() {
     if (resp.status === 401) { window.location.href = '/admin/login'; return; }
     const d = await resp.json();
     if (d.ok === false) throw new Error(d.error);
+
+    // Update database status badge
+    const badge = $('#db-badge');
+    if (d.db_mode === 'turso') {
+      badge.innerHTML = '<span style="color:#3fb950;font-size:1.1rem;line-height:0;vertical-align:middle;">●</span> <strong>Turso Cloud DB</strong> <span style="color:#8b949e">(Persistent)</span>';
+      badge.style.borderColor = '#3fb95055';
+    } else if (d.db_mode === 'vercel_tmp') {
+      badge.innerHTML = '<span style="color:#d29922;font-size:1.1rem;line-height:0;vertical-align:middle;">●</span> <strong>Vercel Ephemeral (/tmp)</strong> <span style="color:#8b949e">(Set TURSO_DATABASE_URL to persist)</span>';
+      badge.style.borderColor = '#d2992255';
+    } else {
+      badge.innerHTML = '<span style="color:#58a6ff;font-size:1.1rem;line-height:0;vertical-align:middle;">●</span> <strong>Local SQLite (moksha.db)</strong>';
+      badge.style.borderColor = '#58a6ff55';
+    }
+
     $('#stats').innerHTML = Object.entries(d.stats).map(([k, v]) =>
       `<div class="stat"><b>${v}</b><span>${k}</span></div>`).join('');
     document.querySelectorAll('.panel').forEach(p => p.remove());
