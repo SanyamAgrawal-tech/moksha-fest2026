@@ -24,11 +24,12 @@ button:hover{filter:brightness(1.1)}
   <div class="card">
     <h1>Moksha <span>Admin</span></h1>
     <p class="sub">Enter the admin password to view the database.</p>
-    <form method="post">
+    <form method="post" action="/admin/login">
       <label for="password">Password</label>
       <input id="password" name="password" type="password" required autofocus placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;">
       <button type="submit">Unlock Dashboard</button>
       {% if error %}<div class="err on">{{ error }}</div>{% endif %}
+      <div style="margin-top:22px;text-align:center;"><a href="/" style="color:var(--sub);font-size:.85rem;text-decoration:none;transition:.2s;">&larr; Back to Moksha Website</a></div>
     </form>
   </div>
 </body>

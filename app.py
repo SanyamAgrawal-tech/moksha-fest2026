@@ -298,6 +298,7 @@ def api_feedback_post():
 
 
 @app.route("/admin/login", methods=["GET", "POST"])
+@app.route("/admin/login/", methods=["GET", "POST"])
 def admin_login():
     error = None
     if request.method == "POST":
@@ -309,12 +310,14 @@ def admin_login():
 
 
 @app.route("/admin/logout")
+@app.route("/admin/logout/")
 def admin_logout():
     session.pop("admin", None)
     return redirect(url_for("admin_login"))
 
 
 @app.route("/admin")
+@app.route("/admin/")
 def admin_page():
     if not is_admin():
         return redirect(url_for("admin_login"))
