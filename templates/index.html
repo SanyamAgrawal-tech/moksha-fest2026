@@ -10,18 +10,18 @@ html{scroll-behavior:smooth}
 body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--tx);line-height:1.6;min-height:100vh;background-image:radial-gradient(circle at 50% 0%,#150d25 0%,#06040a 70%),radial-gradient(circle at 80% 20%,rgba(217,160,91,.08),transparent 40%),radial-gradient(circle at 20% 80%,rgba(122,95,143,.08),transparent 40%)}
 header{position:relative;overflow:hidden;text-align:center;padding:80px 20px 48px;background:linear-gradient(180deg,#0d0915 0%,#06040a 100%);border-bottom:1px solid var(--line)}
 header::before{content:'';position:absolute;inset:-40px -20px -60px -20px;background:radial-gradient(circle at 50% 30%,rgba(217,160,91,.35),transparent 60%);z-index:0;pointer-events:none}
-header h1{position:relative;z-index:1;font-family:'Cinzel',serif;font-size:3.4rem;letter-spacing:14px;font-weight:800;color:var(--acc);text-shadow:0 0 40px rgba(217,160,91,.35),0 4px 30px rgba(0,0,0,.6)}
+header h1{position:relative;z-index:1;font-family:'Cinzel',serif;font-size:3.4rem;letter-spacing:14px;margin-right:-14px;font-weight:800;color:var(--acc);text-shadow:0 0 40px rgba(217,160,91,.35),0 4px 30px rgba(0,0,0,.6)}
 header p{position:relative;z-index:1;margin-top:10px;color:var(--tx-sub);font-size:1.05rem}
-nav{position:sticky;top:0;z-index:100;display:flex;justify-content:center;gap:12px;padding:16px 20px;background:rgba(6,4,10,.85);backdrop-filter:saturate(180%) blur(14px);-webkit-backdrop-filter:saturate(180%) blur(14px);border-bottom:1px solid var(--line)}
+nav{position:sticky;top:0;z-index:100;display:flex;justify-content:center;align-items:center;flex-wrap:wrap;gap:12px;padding:16px 20px;background:rgba(6,4,10,.85);backdrop-filter:saturate(180%) blur(14px);-webkit-backdrop-filter:saturate(180%) blur(14px);border-bottom:1px solid var(--line)}
 nav button{background:transparent;color:var(--tx);border:1px solid var(--line);padding:10px 26px;border-radius:24px;cursor:pointer;font:inherit;font-size:.92rem;font-weight:500;transition:.25s;letter-spacing:.4px}
 nav button:hover{border-color:var(--acc);color:var(--acc)}
 nav button.on{background:linear-gradient(135deg,var(--acc),#b07a4e);border-color:transparent;color:#1a1208;font-weight:700;box-shadow:0 6px 24px rgba(217,160,91,.35)}
-main{max-width:920px;margin:0 auto;padding:48px 20px 80px}
+main{max-width:920px;margin:0 auto;padding:48px 20px 80px;width:100%}
 section{display:none;animation:fade .5s ease}
 section.on{display:block}
 @keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 form, .card{background:linear-gradient(180deg,var(--surface),var(--surface-2));border:1px solid var(--line);border-radius:20px;padding:32px;box-shadow:0 28px 60px rgba(0,0,0,.6),inset 0 1px 0 var(--glass);backdrop-filter:blur(6px)}
-h2{font-family:'Cinzel',serif;font-weight:700;color:var(--acc);margin:0 0 6px;font-size:1.9rem;letter-spacing:3px;text-shadow:0 0 20px rgba(217,160,91,.25)}
+h2{font-family:'Cinzel',serif;font-weight:700;color:var(--acc);margin:0 0 6px;font-size:1.9rem;letter-spacing:3px;margin-right:-3px;text-shadow:0 0 20px rgba(217,160,91,.25)}
 h3{font-weight:500;color:var(--accent-2);margin:28px 0 14px;padding-bottom:6px;border-bottom:1px solid var(--line);font-size:1.05rem;letter-spacing:2px;text-transform:uppercase}
 .g{display:grid;grid-template-columns:1fr 1fr;gap:18px}@media(max-width:680px){.g{grid-template-columns:1fr}}
 label{display:block;font-size:.78rem;color:var(--tx-sub);margin-bottom:6px;font-weight:600;letter-spacing:.5px;text-transform:uppercase}
@@ -62,7 +62,6 @@ footer{text-align:center;color:var(--tx-sub);font-size:.82rem;padding:32px 20px;
   <button data-t="vendor">Vendors</button>
   <button data-t="sponsor">Sponsors</button>
   <button data-t="feedback">Feedback &amp; Requests</button>
-  <a href="/admin/login" style="margin-left:auto;text-decoration:none;color:var(--acc);border:1px solid var(--acc);padding:9px 20px;border-radius:24px;font-size:.9rem;font-weight:700;letter-spacing:.5px;display:inline-flex;align-items:center;transition:.25s;">Admin Portal &rarr;</a>
 </nav>
 
 <main>
@@ -113,8 +112,10 @@ footer{text-align:center;color:var(--tx-sub);font-size:.82rem;padding:32px 20px;
       <div><label>How did you hear?</label><select name="how_heard"><option value="">Select</option><option>Instagram</option><option>Friends</option><option>Posters</option><option>College notice</option><option>Website</option><option>Other</option></select></div>
     </div>
 
-    <button type="button" class="btn-back" style="margin-top:0;margin-right:12px" onclick="backStep()">&larr; Back</button>
-    <button class="sub" type="submit">Register</button>
+    <div style="display:flex;gap:12px;align-items:center;margin-top:28px;flex-wrap:wrap;">
+      <button type="button" class="btn-back" style="margin-top:0;" onclick="backStep()">&larr; Back</button>
+      <button class="sub" type="submit" style="margin-top:0;">Register &check;</button>
+    </div>
     <div id="msg"></div>
     </div>
   </form>
@@ -210,11 +211,23 @@ footer{text-align:center;color:var(--tx-sub);font-size:.82rem;padding:32px 20px;
 </section>
 </main>
 
-<footer>&copy; 2026 Moksha, Netaji Subhas University of Technology &bull; <a href="/admin/login" style="color:var(--acc);text-decoration:none;font-weight:600;">Admin Login</a></footer>
+<footer>&copy; 2026 Moksha, Netaji Subhas University of Technology &bull; All Rights Reserved</footer>
 
 <script>
 const $ = s => document.querySelector(s);
-const api = (u, o) => fetch(u, o).then(r => r.json());
+const api = async (u, o) => {
+  try {
+    const r = await fetch(u, o);
+    const text = await r.text();
+    try {
+      return JSON.parse(text);
+    } catch (e) {
+      return { ok: false, error: 'Server response error: ' + (text.slice(0, 100) || r.statusText) };
+    }
+  } catch (err) {
+    return { ok: false, error: err.message || 'Network connection error' };
+  }
+};
 
 // Nav
 const navBtns = document.querySelectorAll('nav button');
@@ -354,7 +367,15 @@ async function loadFeedback() {
 }
 
 function nextStep() {
-  document.getElementById('step-1').style.display = 'none';
+  const step1 = document.getElementById('step-1');
+  const requiredInputs = step1.querySelectorAll('input[required], select[required]');
+  for (const el of requiredInputs) {
+    if (!el.checkValidity()) {
+      el.reportValidity();
+      return;
+    }
+  }
+  step1.style.display = 'none';
   document.getElementById('step-2').style.display = 'block';
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }

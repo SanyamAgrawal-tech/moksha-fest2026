@@ -3,6 +3,7 @@ import secrets
 import os
 import shutil
 import tempfile
+import urllib.parse
 from contextlib import contextmanager
 from flask import Flask, request, jsonify, render_template, session, redirect, url_for, Response
 
@@ -26,11 +27,36 @@ class VercelPathFixMiddleware:
         self.wsgi_app = wsgi_app
 
     def __call__(self, environ, start_response):
-        path = environ.get('PATH_INFO', '')
+        qs = environ.get('QUERY_STRING', '')
+        parsed_qs = urllib.parse.parse_qs(qs, keep_blank_values=True)
+        url_from_param = None
+        if '__url__' in parsed_qs:
+            url_from_param = parsed_qs.pop('__url__')[0]
+            environ['QUERY_STRING'] = urllib.parse.urlencode(parsed_qs, doseq=True)
+
+        path = (
+            url_from_param or
+            environ.get('HTTP_X_MATCHED_PATH') or
+            environ.get('HTTP_X_VERCEL_MATCHED_PATH') or
+            environ.get('HTTP_X_FORWARDED_URI') or
+            environ.get('HTTP_X_ORIGINAL_URI') or
+            environ.get('REQUEST_URI') or
+            environ.get('RAW_URI') or
+            environ.get('PATH_INFO', '')
+        )
+
+        parts = path.split('?', 1)
+        path = parts[0] or '/'
+
         if path.startswith('/api/index.py'):
-            environ['PATH_INFO'] = path[len('/api/index.py'):] or '/'
+            path = path[len('/api/index.py'):] or '/'
         elif path.startswith('/api/index'):
-            environ['PATH_INFO'] = path[len('/api/index'):] or '/'
+            path = path[len('/api/index'):] or '/'
+
+        if not path.startswith('/'):
+            path = '/' + path
+
+        environ['PATH_INFO'] = path
         return self.wsgi_app(environ, start_response)
 
 
@@ -49,8 +75,18 @@ def get_db_path():
         tmp_dir = tempfile.gettempdir()
         tmp_db = os.path.join(tmp_dir, "moksha.db")
         orig_db = os.path.join(BASE_DIR, "moksha.db")
-        if not os.path.exists(tmp_db) and os.path.exists(orig_db):
-            shutil.copy2(orig_db, tmp_db)
+        if not os.path.exists(tmp_db):
+            if os.path.exists(orig_db):
+                try:
+                    shutil.copy2(orig_db, tmp_db)
+                    os.chmod(tmp_db, 0o666)
+                except Exception:
+                    pass
+        elif os.path.exists(tmp_db):
+            try:
+                os.chmod(tmp_db, 0o666)
+            except Exception:
+                pass
         return tmp_db
     return os.path.join(BASE_DIR, "moksha.db")
 
@@ -59,23 +95,41 @@ def is_admin():
     return session.get("admin") is True
 
 
+_db_initialized = False
+
+
+def ensure_db_initialized():
+    global _db_initialized
+    if not _db_initialized:
+        try:
+            init_db()
+            _db_initialized = True
+        except Exception:
+            pass
+
+
 def GET_DB():
     if is_using_turso():
         return turso_db.TursoConnection(
             os.environ["TURSO_DATABASE_URL"],
             os.environ["TURSO_AUTH_TOKEN"]
         )
+    db_path = get_db_path()
+    os.makedirs(os.path.dirname(os.path.abspath(db_path)), exist_ok=True)
     # timeout: wait up to 30s instead of failing instantly if the file is briefly locked
-    conn = sqlite3.connect(get_db_path(), timeout=30)
+    conn = sqlite3.connect(db_path, timeout=30)
     conn.execute("PRAGMA foreign_keys = ON")
-    # WAL mode: readers (incl. external tools like DB Browser) don't block our writes
-    conn.execute("PRAGMA journal_mode = WAL")
+    try:
+        conn.execute("PRAGMA journal_mode = WAL")
+    except Exception:
+        pass
     return conn
 
 
 @contextmanager
 def db():
     """Connection that commits on success, rolls back on error, and always closes."""
+    ensure_db_initialized()
     conn = GET_DB()
     try:
         yield conn, conn.cursor()
@@ -167,7 +221,7 @@ def clean(v):
 @app.route("/api/register", methods=["POST"])
 def api_register():
     try:
-        data = request.get_json()
+        data = request.get_json(silent=True) or request.form.to_dict() or {}
         with db() as (conn, cursor):
             # Ensure college exists or insert it
             college_name = (data.get("college_name") or "").strip()
@@ -184,13 +238,23 @@ def api_register():
                          1 if college_name == "NSUT" else 0))
                     college_id = cursor.lastrowid
 
+            try:
+                age_val = int(data.get("age")) if clean(data.get("age")) else 0
+            except (ValueError, TypeError):
+                age_val = 0
+
+            try:
+                year_val = int(data.get("year_of_study")) if clean(data.get("year_of_study")) else None
+            except (ValueError, TypeError):
+                year_val = None
+
             cursor.execute(
                 """INSERT INTO PARTICIPANT (full_name, email, phone, age, gender, college_id, enrollment_no, year_of_study, course_branch, state, emergency_name, emergency_phone, dietary_pref, tshirt_size, accommodation, id_proof_type, how_heard, participant_role, special_needs)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (data.get("full_name"), data.get("email"), data.get("phone"),
-                 int(data["age"]) if clean(data.get("age")) else 0,
+                 age_val,
                  data.get("gender"), college_id, clean(data.get("enrollment_no")),
-                 int(data["year_of_study"]) if clean(data.get("year_of_study")) else None,
+                 year_val,
                  clean(data.get("course_branch")), clean(data.get("state")),
                  clean(data.get("emergency_name")), clean(data.get("emergency_phone")),
                  clean(data.get("dietary_pref")), clean(data.get("tshirt_size")),
@@ -206,11 +270,20 @@ def api_register():
             experience_level = data.get("experience_level", "")
             pass_type = data.get("pass_type", "All Days")
 
+            try:
+                team_sz = int(team_size) if team_size else None
+            except (ValueError, TypeError):
+                team_sz = None
+
             for eid in event_ids:
+                try:
+                    event_id_int = int(eid)
+                except (ValueError, TypeError):
+                    continue
                 cursor.execute(
                     "INSERT INTO REGISTRATION (participant_id, event_id, team_name, team_size, experience_level) VALUES (?, ?, ?, ?, ?)",
-                    (participant_id, int(eid), team_name or None,
-                     int(team_size) if team_size else None,
+                    (participant_id, event_id_int, team_name or None,
+                     team_sz,
                      experience_level or None))
 
             # Entry pass price = sum of selected event fees (0 if none)
